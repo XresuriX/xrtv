@@ -1,6 +1,7 @@
+"use client"
 import HlsPlayer from "@/components/HlsPlayer";
 import Animation from "@/components/animate";
-import { ArrowDownRightIcon, StarIcon} from "lucide-react";
+import { ArrowDownRightIcon} from "lucide-react";
 
 export const HeroSection = () => {
     return (
@@ -35,7 +36,6 @@ export const HeroSection = () => {
             </div>
             <div className="p-3 md:p-6 w-full mt-16 border-t border-gray-800">
                 <HlsPlayer 
-                    streamName="" 
                     autoPlay={true}
                     controls={true}
                     className="rounded-xl shadow-lg"

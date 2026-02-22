@@ -20,7 +20,7 @@ const HlsPlayer: React.FC<HlsPlayerProps> = ({
   const [streamNameInput, setStreamNameInput] = useState(initialStream);
   const [streamName, setStreamName] = useState(initialStream);
   const [status, setStatus] = useState('Enter stream name');
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Get base URL from Vite environment
@@ -68,6 +68,7 @@ const HlsPlayer: React.FC<HlsPlayerProps> = ({
       video.src = '';
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsPlaying(false);
     setError(null);
 
@@ -110,7 +111,7 @@ const HlsPlayer: React.FC<HlsPlayerProps> = ({
         if (autoPlay) video.play().catch(() => {});
       });
 
-      hls.on(Hls.Events.ERROR, (event, data) => {
+      hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
             hls.startLoad();

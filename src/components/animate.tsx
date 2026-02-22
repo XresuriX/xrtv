@@ -1,5 +1,5 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import React, { FC, useState } from 'react'
+import { type FC, useState } from 'react'
 import { Engine, Scene, useBeforeRender, useScene } from 'react-babylonjs'
 
 type RotatingBoxProps = {
@@ -30,7 +30,7 @@ const RotatingBox: FC<Partial<RotatingBoxProps>> = (props) => {
 
 const Animation: FC = () => {
   const [rpm, setRPM] = useState(10)
-  const onChange = (e) => {
+  const onChange = (e: { target: { value: string } }) => {
     setRPM(parseInt(e.target.value, 10))
   }
 
