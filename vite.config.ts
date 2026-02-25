@@ -22,7 +22,7 @@ export default defineConfig({
   },
   
   build: {
-    outDir: 'dist',
+    outDir: './dist',
     sourcemap: false,
     // CRITICAL: Prevent externalization of app modules
     rollupOptions: {
