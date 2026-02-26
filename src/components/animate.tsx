@@ -1,4 +1,4 @@
-import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Vector3 } from '@babylonjs/core'
 import { type FC, useState } from 'react'
 import { Engine, Scene, useBeforeRender, useScene } from 'react-babylonjs'
 

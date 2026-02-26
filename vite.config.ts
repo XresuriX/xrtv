@@ -37,7 +37,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           // Optimize caching by splitting vendor libraries
-          'babylon-vendor': ['babylonjs', 'react-babylonjs'],
+          'babylon-vendor': ['@babylonjs/core', 'react-babylonjs'],
           // Include common UI dependencies used by shadcn
           'ui-vendor': [
             'clsx',
