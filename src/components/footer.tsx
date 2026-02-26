@@ -11,7 +11,7 @@ export const Footer = () => {
                             height={30}
                         />
                         <p className="mt-6 text-sm/7 max-w-sm text-gray-500">
-                            Amet minim mollit non deserunt ullamco est sit aliqua dolor do amet sint. Velit officia consequat duis enim velit mollit.
+                            
                         </p>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -75,11 +75,11 @@ export const Footer = () => {
             <div className="border-t border-gray-800">
                 <p className="text-gray-500 py-6 text-center">
                     Copyright {new Date().getFullYear()} &copy;
-                    <a target="_blank" href="https://prebuiltui.com?utm_source=mapple">
-                        PrebuiltUI
+                    <a target="_blank" href="">
+                       
                     </a>{' '}• Distributed by
-                    <a target="_blank" href="https://themewagon.com">
-                        ThemeWagon
+                    <a target="_blank" href="">
+
                     </a>{' '}• 
                     All Right Reserved.
                 </p>

@@ -21,30 +21,23 @@ export default defineConfig({
     extensions: ['.tsx', '.ts', '.jsx', '.js', '.json'],
   },
 
-  // Development server settings – only used in dev mode
-  server: {
-    host: '0.0.0.0',      // Listen on all network interfaces (for Docker)
-    port: 3001,
-    strictPort: true,      // Fail if port is already in use
-  },
-
   build: {
-    outDir: 'dist',        // Dokploy/Nixpacks expects 'dist' for Vite
-    sourcemap: false,      // Smaller production builds
-    chunkSizeWarningLimit: 1000, // Babylon.js is large; increase warning threshold
+    outDir: 'dist',
+    sourcemap: false,  
+    chunkSizeWarningLimit: 1000, 
 
     rollupOptions: {
       output: {
         manualChunks: {
-          // Optimize caching by splitting vendor libraries
+
           'babylon-vendor': ['@babylonjs/core', 'react-babylonjs'],
-          // Include common UI dependencies used by shadcn
+          
           'ui-vendor': [
             'clsx',
             'tailwind-merge',
             'class-variance-authority',
             '@radix-ui/react-slot',
-            'lucide-react', // if you use shadcn icons
+            'lucide-react', 
           ],
         },
       },
