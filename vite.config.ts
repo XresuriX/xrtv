@@ -1,32 +1,56 @@
-import { defineConfig } from 'vite'
-import path from 'path'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Fix for __dirname in ESM environments
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  
+  base: '/',
+
+  plugins: [
+    react(),
+  ],
+
   resolve: {
-    // CRITICAL: Single alias with ABSOLUTE path
     alias: {
-      '@': path.resolve(__dirname, 'src')
+      // Critical for shadcn – must match tsconfig.json paths
+      '@': path.resolve(__dirname, './src'),
     },
-    // Explicit extensions for resolver
-    extensions: ['.tsx', '.ts', '.jsx', '.js']
+    extensions: ['.tsx', '.ts', '.jsx', '.js', '.json'],
   },
-  
+
+  // Development server settings – only used in dev mode
   server: {
-    host: true,
+    host: '0.0.0.0',      // Listen on all network interfaces (for Docker)
     port: 3000,
-    cors: { origin: '*', credentials: true }
+    strictPort: true,      // Fail if port is already in use
   },
-  
+
   build: {
-    outDir: './dist',
-    sourcemap: false,
-    // CRITICAL: Prevent externalization of app modules
+    outDir: 'dist',        // Dokploy/Nixpacks expects 'dist' for Vite
+    sourcemap: false,      // Smaller production builds
+    chunkSizeWarningLimit: 1000, // Babylon.js is large; increase warning threshold
+
     rollupOptions: {
-      external: [] // Ensure NO app modules are externalized
-    }
-  }
-})
+      output: {
+        manualChunks: {
+          // Optimize caching by splitting vendor libraries
+          'babylon-vendor': ['babylonjs', 'react-babylonjs'],
+          // Include common UI dependencies used by shadcn
+          'ui-vendor': [
+            'clsx',
+            'tailwind-merge',
+            'class-variance-authority',
+            '@radix-ui/react-slot',
+            'lucide-react', // if you use shadcn icons
+          ],
+        },
+      },
+    },
+  },
+
+  // If you load 3D models, tell Vite to treat them as assets
+  assetsInclude: ['**/*.glb', '**/*.gltf', '**/*.hdr'],
+});
