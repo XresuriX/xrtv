@@ -24,7 +24,7 @@ export default defineConfig({
   // Development server settings – only used in dev mode
   server: {
     host: '0.0.0.0',      // Listen on all network interfaces (for Docker)
-    port: 3000,
+    port: 3001,
     strictPort: true,      // Fail if port is already in use
   },
 
