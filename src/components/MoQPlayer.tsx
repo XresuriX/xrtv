@@ -33,6 +33,7 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
   const streamReaderRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
   const spsRef = useRef<Uint8Array | null>(null);
   const ppsRef = useRef<Uint8Array | null>(null);
+  const isConnectingRef = useRef(false);
   
   const [streamNameInput, setStreamNameInput] = useState(streamUrl);
   const [streamName, setStreamName] = useState(streamUrl);
@@ -55,7 +56,7 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
     onStatusChange?.(newStatus);
   }, [onStatusChange]);
 
-  const configureDecoder = useCallback((sps: Uint8Array, pps: Uint8Array) => {
+  const configureDecoder = useCallback((sps: Uint8Array) => {
     if (decoderRef.current?.state === 'configured') return;
 
     let actualSps = sps;
@@ -98,6 +99,8 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
   }, []);
 
   const cleanup = useCallback(() => {
+    isConnectingRef.current = false;
+    
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
@@ -182,11 +185,14 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
   }, [cleanup, updateStatus]);
 
   const connectMoQ = useCallback(async () => {
-    if (!streamNameInput.trim()) {
-      setError('Stream name cannot be empty');
+    if (!streamNameInput.trim() || isConnectingRef.current) {
+      if (!streamNameInput.trim()) {
+        setError('Stream name cannot be empty');
+      }
       return;
     }
 
+    isConnectingRef.current = true;
     cleanup();
     setError(null);
     updateStatus('Connecting...');
@@ -196,14 +202,18 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
 
       transportRef.current = transport;
 
-      transport.onopen = () => {
+      // WebTransport uses Promise-based API
+      transport.ready.then(() => {
         setIsConnected(true);
+        isConnectingRef.current = false;
         updateStatus('Connected, waiting for stream...');
         
         if (autoPlay) {
           startRenderLoop();
         }
-      };
+      }).catch(() => {
+        isConnectingRef.current = false;
+      });
 
       transport.closed.then(() => {
         cleanup();
@@ -212,12 +222,6 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
         cleanup();
         updateStatus('Connection closed');
       });
-
-      transport.onerror = () => {
-        setError('Connection error occurred');
-        updateStatus('Connection error');
-        cleanup();
-      };
 
       await transport.ready;
       
@@ -235,26 +239,22 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
               const data = new Uint8Array(value);
               const type = data[0];
               
-              // MoQ message parsing - simplified example
               if (type === 0x00 && data.length > 8) {
                 const groupId = data[1];
                 const objectId = data[2];
                 const size = (data[3] << 16) | (data[4] << 8) | data[5];
                 const payload = data.slice(6, 6 + size);
                 
-                // Try to configure decoder with SPS/PPS when received
                 if (groupId === 0x01 && objectId === 0x01 && payload.length > 10) {
-                  // This is a simplified check - real implementation needs proper NAL parsing
                   if (!spsRef.current && payload[0] === 0x07) {
                     spsRef.current = payload;
                   }
                   if (spsRef.current && !ppsRef.current && payload[0] === 0x08) {
                     ppsRef.current = payload;
-                    configureDecoder(spsRef.current, ppsRef.current);
+                    configureDecoder(spsRef.current);
                   }
                 }
                 
-                // Decode video frames once decoder is configured
                 if (decoderRef.current?.state === 'configured') {
                   if (groupId === 0x01) {
                     decoderRef.current.decode(new EncodedVideoChunk({
@@ -282,6 +282,7 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
       updateStatus('Waiting for media...');
 
     } catch (err) {
+      isConnectingRef.current = false;
       console.error('MoQ connection error:', err);
       setError(err instanceof Error ? err.message : 'Failed to connect to MoQ server');
       updateStatus('Connection failed');
@@ -308,7 +309,7 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
         />
         <button
           onClick={connectMoQ}
-          disabled={!streamNameInput.trim()}
+          disabled={!streamNameInput.trim() || isConnectingRef.current}
           className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed transition"
         >
           {isConnected ? 'Reconnect' : 'Connect'}
