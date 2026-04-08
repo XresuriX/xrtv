@@ -1,9 +1,13 @@
 "use client"
 import HlsPlayer from "@/components/HlsPlayer";
+import MoQPlayer from "@/components/MoQPlayer";
 import Animation from "@/components/animate";
 import { ArrowDownRightIcon} from "lucide-react";
+import { useState } from "react";
 
 export const HeroSection = () => {
+    const [activePlayer, setActivePlayer] = useState<'hls' | 'moq'>('hls');
+    
     return (
         <>
             <div className="flex flex-col max-md:px-2 items-center justify-center bg-linear-to-r from-red-500 to-yellow-300">
@@ -35,11 +39,42 @@ export const HeroSection = () => {
                 </div>
             </div>
             <div className="p-3 md:p-6 w-full mt-16 border-t border-gray-800">
-                <HlsPlayer 
-                    autoPlay={true}
-                    controls={true}
-                    className="rounded-xl shadow-lg"
-                />
+                <div className="flex gap-2 mb-4">
+                    <button
+                        onClick={() => setActivePlayer('hls')}
+                        className={`px-4 py-2 rounded-lg font-medium transition ${
+                            activePlayer === 'hls' 
+                                ? 'bg-blue-600 text-white' 
+                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        }`}
+                    >
+                        HLS Player
+                    </button>
+                    <button
+                        onClick={() => setActivePlayer('moq')}
+                        className={`px-4 py-2 rounded-lg font-medium transition ${
+                            activePlayer === 'moq' 
+                                ? 'bg-blue-600 text-white' 
+                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        }`}
+                    >
+                        MoQ Player (Experimental)
+                    </button>
+                </div>
+                
+                {activePlayer === 'hls' ? (
+                    <HlsPlayer 
+                        autoPlay={true}
+                        controls={true}
+                        className="rounded-xl shadow-lg"
+                    />
+                ) : (
+                    <MoQPlayer 
+                        autoPlay={true}
+                        controls={true}
+                        className="rounded-xl shadow-lg"
+                    />
+                )}
                 <Animation/>
             </div>
         </>

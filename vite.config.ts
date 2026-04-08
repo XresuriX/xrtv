@@ -13,6 +13,18 @@ export default defineConfig({
     react(),
   ],
 
+  server: {
+    headers: {
+      'Sec-WebSocket-Extensions': 'permessage-deflate',
+    },
+  },
+
+  preview: {
+    headers: {
+      'Sec-WebSocket-Extensions': 'permessage-deflate',
+    },
+  },
+
   resolve: {
     alias: {
       // Critical for shadcn – must match tsconfig.json paths
