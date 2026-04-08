@@ -30,6 +30,9 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
   const transportRef = useRef<WebTransport | null>(null);
   const frameBufferRef = useRef<VideoFrame[]>([]);
   const animationFrameRef = useRef<number | null>(null);
+  const streamReaderRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+  const spsRef = useRef<Uint8Array | null>(null);
+  const ppsRef = useRef<Uint8Array | null>(null);
   
   const [streamNameInput, setStreamNameInput] = useState(streamUrl);
   const [streamName, setStreamName] = useState(streamUrl);
@@ -52,79 +55,15 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
     onStatusChange?.(newStatus);
   }, [onStatusChange]);
 
-  const cleanup = useCallback(() => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    
-    if (decoderRef.current && decoderRef.current.state !== 'closed') {
-      try {
-        decoderRef.current.close();
-      } catch {}
-      decoderRef.current = null;
-    }
-    
-    if (transportRef.current && transportRef.current.state !== 'closed') {
-      try {
-        transportRef.current.close();
-      } catch {}
-      transportRef.current = null;
-    }
-    
-    frameBufferRef.current.forEach(frame => {
-      try { frame.close(); } catch {}
-    });
-    frameBufferRef.current = [];
-    
-    setIsConnected(false);
-  }, []);
-
-  const renderFrame = useCallback(() => {
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    if (!canvas || !video) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const now = performance.now();
-    const buffer = frameBufferRef.current;
-    
-    if (buffer.length > 0 && now - (buffer[0] as any).renderTime >= 33) {
-      const frame = buffer.shift();
-      if (frame) {
-        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
-        (frame as any).renderTime = now;
-        try { frame.close(); } catch {}
-        
-        setStats(prev => ({
-          ...prev,
-          framesDecoded: prev.framesDecoded + 1,
-          bufferLevel: buffer.length
-        }));
-      }
-    }
-    
-    animationFrameRef.current = requestAnimationFrame(renderFrame);
-  }, []);
-
   const configureDecoder = useCallback((sps: Uint8Array, pps: Uint8Array) => {
     if (decoderRef.current?.state === 'configured') return;
 
     let actualSps = sps;
-    let actualPps = pps;
     
     if (sps[0] === 0x00 && sps[1] === 0x00 && sps[2] === 0x00 && sps[3] === 0x01) {
       actualSps = sps.slice(4);
     } else if (sps[0] === 0x00 && sps[1] === 0x00 && sps[2] === 0x01) {
       actualSps = sps.slice(3);
-    }
-    
-    if (pps[0] === 0x00 && pps[1] === 0x00 && pps[2] === 0x00 && pps[3] === 0x01) {
-      actualPps = pps.slice(4);
-    } else if (pps[0] === 0x00 && pps[1] === 0x00 && pps[2] === 0x01) {
-      actualPps = pps.slice(3);
     }
 
     const codecString = `avc1.${actualSps[1].toString(16).padStart(2, '0')}${actualSps[2].toString(16).padStart(2, '0')}${actualSps[3].toString(16).padStart(2, '0')}`;
@@ -158,6 +97,90 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
     }
   }, []);
 
+  const cleanup = useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    
+    if (decoderRef.current && decoderRef.current.state !== 'closed') {
+      try {
+        decoderRef.current.close();
+      } catch {
+        // Ignore cleanup errors
+      }
+      decoderRef.current = null;
+    }
+    
+    if (transportRef.current) {
+      try {
+        transportRef.current.close();
+      } catch {
+        // Ignore cleanup errors
+      }
+      transportRef.current = null;
+    }
+    
+    if (streamReaderRef.current) {
+      try {
+        streamReaderRef.current.cancel();
+      } catch {
+        // Ignore cleanup errors
+      }
+      streamReaderRef.current = null;
+    }
+    
+    frameBufferRef.current.forEach(frame => {
+      try { frame.close(); } catch {
+        // Ignore cleanup errors
+      }
+    });
+    frameBufferRef.current = [];
+    
+    setIsConnected(false);
+  }, []);
+
+  const renderFrame = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const now = performance.now();
+    const buffer = frameBufferRef.current;
+    
+    if (buffer.length > 0 && now - ((buffer[0] as unknown as { renderTime: number }).renderTime || 0) >= 33) {
+      const frame = buffer.shift();
+      if (frame) {
+        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+        (frame as unknown as { renderTime: number }).renderTime = now;
+        try { frame.close(); } catch {
+          // Ignore errors
+        }
+        
+        setStats(prev => ({
+          ...prev,
+          framesDecoded: prev.framesDecoded + 1,
+          bufferLevel: buffer.length
+        }));
+      }
+    }
+    
+    animationFrameRef.current = requestAnimationFrame(renderFrame);
+  }, []);
+
+  const startRenderLoop = useCallback(() => {
+    if (animationFrameRef.current) return;
+    renderFrame();
+  }, [renderFrame]);
+
+  const disconnect = useCallback(() => {
+    cleanup();
+    setStreamName('');
+    updateStatus('Disconnected');
+  }, [cleanup, updateStatus]);
+
   const connectMoQ = useCallback(async () => {
     if (!streamNameInput.trim()) {
       setError('Stream name cannot be empty');
@@ -169,13 +192,11 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
     updateStatus('Connecting...');
 
     try {
-      const transport = new WebTransport(moqUrl, {
-        allowInsecure: false
-      });
+      const transport = new WebTransport(moqUrl);
 
       transportRef.current = transport;
 
-      transport.on开放 = () => {
+      transport.onopen = () => {
         setIsConnected(true);
         updateStatus('Connected, waiting for stream...');
         
@@ -184,22 +205,25 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
         }
       };
 
-      transport.onclosed = () => {
+      transport.closed.then(() => {
         cleanup();
         updateStatus('Connection closed');
-      };
+      }).catch(() => {
+        cleanup();
+        updateStatus('Connection closed');
+      });
 
-      transport.onerror = (err) => {
-        console.error('WebTransport error:', err);
-        setError(`Connection error: ${err.message || 'Unknown error'}`);
+      transport.onerror = () => {
+        setError('Connection error occurred');
         updateStatus('Connection error');
         cleanup();
       };
 
       await transport.ready;
       
-      const uniStream = transport.acceptUnidirectionalStream;
+      const uniStream = transport.incomingUnidirectionalStreams;
       const reader = uniStream.getReader();
+      streamReaderRef.current = reader;
       
       const readLoop = async () => {
         try {
@@ -211,24 +235,40 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
               const data = new Uint8Array(value);
               const type = data[0];
               
+              // MoQ message parsing - simplified example
               if (type === 0x00 && data.length > 8) {
                 const groupId = data[1];
                 const objectId = data[2];
                 const size = (data[3] << 16) | (data[4] << 8) | data[5];
                 const payload = data.slice(6, 6 + size);
                 
-                if (groupId === 0x01 && objectId === 0x01 && decoderRef.current?.state === 'configured') {
-                  decoderRef.current.decode(new EncodedVideoChunk({
-                    type: 'key',
-                    timestamp: Date.now() * 1000,
-                    data: payload
-                  }));
-                } else if (groupId === 0x02 && decoderRef.current?.state === 'configured') {
-                  decoderRef.current.decode(new EncodedVideoChunk({
-                    type: 'delta',
-                    timestamp: Date.now() * 1000,
-                    data: payload
-                  }));
+                // Try to configure decoder with SPS/PPS when received
+                if (groupId === 0x01 && objectId === 0x01 && payload.length > 10) {
+                  // This is a simplified check - real implementation needs proper NAL parsing
+                  if (!spsRef.current && payload[0] === 0x07) {
+                    spsRef.current = payload;
+                  }
+                  if (spsRef.current && !ppsRef.current && payload[0] === 0x08) {
+                    ppsRef.current = payload;
+                    configureDecoder(spsRef.current, ppsRef.current);
+                  }
+                }
+                
+                // Decode video frames once decoder is configured
+                if (decoderRef.current?.state === 'configured') {
+                  if (groupId === 0x01) {
+                    decoderRef.current.decode(new EncodedVideoChunk({
+                      type: 'key',
+                      timestamp: Date.now() * 1000,
+                      data: payload
+                    }));
+                  } else if (groupId === 0x02) {
+                    decoderRef.current.decode(new EncodedVideoChunk({
+                      type: 'delta',
+                      timestamp: Date.now() * 1000,
+                      data: payload
+                    }));
+                  }
                 }
               }
             }
@@ -247,18 +287,7 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
       updateStatus('Connection failed');
       cleanup();
     }
-  }, [streamNameInput, moqUrl, autoPlay, cleanup, updateStatus]);
-
-  const startRenderLoop = useCallback(() => {
-    if (animationFrameRef.current) return;
-    renderFrame();
-  }, [renderFrame]);
-
-  const disconnect = useCallback(() => {
-    cleanup();
-    setStreamName('');
-    updateStatus('Disconnected');
-  }, [cleanup, updateStatus]);
+  }, [streamNameInput, moqUrl, autoPlay, cleanup, updateStatus, startRenderLoop, configureDecoder]);
 
   useEffect(() => {
     return () => {
@@ -282,7 +311,7 @@ const MoQPlayer: React.FC<MoQPlayerProps> = ({
           disabled={!streamNameInput.trim()}
           className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed transition"
         >
-          {isConnected ? '🔄 Reconnect' : '▶️ Connect'}
+          {isConnected ? 'Reconnect' : 'Connect'}
         </button>
         {isConnected && (
           <button
